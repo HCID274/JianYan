@@ -3,7 +3,7 @@
   "max_seconds": 300,
   "temp_dir": "temp",
   "model_cache_dir": "models",
-  "openai_api_key": "kong",
+  "openai_api_key": "",
   "openai_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
   "qwen_model": "qwen-flash",
   "suppress_missing_llm_prompt": false
