@@ -1,68 +1,169 @@
 ﻿# 语音转文字工具（Windows）
 
-## 适合谁
-- 需要在 Windows 上用快捷键快速“语音转文字 + 规整输出”的用户
+一款 Windows 端语音转文字工具。支持 NVIDIA 显卡本地部署，提供秒级响应。快捷键录音、本地 AI 转写、自动去口水词，一键粘贴到任意位置。
 
-## 功能概览
-- AI 自动去口水/去重复，让语音更精炼，不用担心啰唆废话
-- `Ctrl+Shift+Space` 开始/停止录音
-- 本地 SenseVoice Small 转写
-- OpenAI 兼容模型进行整理（推荐 Qwen）
-- 自动粘贴到当前光标位置
+---
 
-## 安装（推荐安装包）
-### 准备
-1) 下载 Python 安装包 `python-3.10.13-amd64.exe` 放到 `installer/`
-2) 安装 Inno Setup
+## 目录
 
-### 构建安装包（开发者）
-1) 用 Inno Setup 打开并编译：`installer\setup.iss`
-2) 生成安装包：`installer\output\AudioToTextSetup.exe`
+- [功能亮点](#功能亮点)
+- [快速上手](#快速上手)
+- [开发者部署指南](#开发者部署指南)
+- [使用教程](#使用教程)
+- [配置说明](#配置说明)
+- [技术规格](#技术规格)
+- [常见问题](#常见问题)
 
-### 用户安装流程
-1) 下载并运行安装包
-2) 选择普通可写目录（如 `D:\Apps` 或 `D:\Tools`），不要选系统保护目录（如 `C:\Program Files`）
-3) 安装过程中自动检测 NVIDIA 驱动：
-   - 有驱动：安装 CUDA 版依赖
-   - 无驱动：提示是否继续安装 CPU 版
-4) 安装阶段自动下载模型并显示只读进度输出，预计 5–20 分钟（取决于网速）
-5) 安装完成即可使用
+---
 
-### 开发者快速安装（RTX 显卡）
-**前提**：已安装 Python 3.10 + NVIDIA 驱动
+## 功能亮点
+
+- **NVIDIA 本地部署**：支持 RTX 显卡 CUDA 加速，转写速度秒级响应
+- **快捷键录音**：`Ctrl+Shift+Space` 开始/停止录音
+- **本地 AI 转写**：使用 SenseVoice Small 模型，无需联网
+- **智能去口水**：AI 自动去除重复、口水词，让表达更精炼（需配置 API）
+- **自动粘贴**：转写完成后自动粘贴到当前光标位置
+
+---
+
+## 快速上手
+
+### 1. 下载安装包
+
+下载 `JianyanSetup_0.1.0.exe`（约 3.3GB），内含模型权重、Python 虚拟环境与可执行程序。
+
+下载地址：https://jianyan.hcid274.xyz/downloads/JianyanSetup_0.1.0.exe
+
+### 2. 运行安装
+
+直接安装即用。程序会自动检测 RTX 显卡并启用加速，无显卡则回退 CPU 模式。
+
+**注意**：请选择普通目录安装（如 `D:\Apps`），不要选择 `C:\Program Files` 等系统保护目录。
+
+### 3. 配置 API（可选）
+
+如需「润色去重」功能，在托盘设置中填写 OpenAI 兼容格式 API：
+- Base URL
+- API Key
+- Model（推荐 Qwen 系列）
+
+---
+
+## 开发者部署指南
+
+本章节面向需要从源码构建或二次开发的技术人员。
+
+### 环境要求
+
+| 依赖 | 要求 |
+|------|------|
+| Python | 3.10.13 |
+| 显卡驱动 | NVIDIA 驱动（支持 CUDA 加速） |
+| 操作系统 | Windows 10/11 |
+
+### 从源码安装
+
+**方式一：一键安装（推荐）**
 
 ```cmd
-# 一键安装（推荐）
 install.cmd
+```
 
-# 或手动安装
+**方式二：手动安装**
+
+```cmd
+# 1. 创建虚拟环境
 py -3.10 -m venv .venv
+
+# 2. 激活虚拟环境
 .\.venv\Scripts\activate
+
+# 3. 安装 PyTorch（CUDA 版）
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# 4. 安装其他依赖
 pip install -r requirements.txt
+
+# 5. 下载模型
 python scripts\predownload_models.py
 ```
 
+### 构建安装包
 
-## 启动方式
-- 开始菜单/桌面图标
-- 或运行：`run_app.cmd`
+1. 确保已安装 Python 3.10.13
+2. 安装 [Inno Setup](https://jrsoftware.org/isinfo.php)
+3. 用 Inno Setup 打开并编译：`installer\setup.iss`
+4. 生成的安装包位于：`installer\output\AudioToTextSetup.exe`
 
-## 设置（托盘右键）
-- OpenAI Base URL
-- OpenAI API Key
-- 模型名（推荐 Qwen 系列）
+---
 
-## 模型说明
-- SenseVoice Small 本地模型
-- 模型缓存目录：安装目录下 `models/`
-- 录音格式：WAV PCM 16kHz 单声道
+## 使用教程
 
-## 空间与性能
-- 安装依赖 + 模型缓存：约 6–10 GB
-- GPU 显存占用：约 2–4 GB（含 VAD/标点）
+### 启动应用
+
+- 桌面快捷方式
+- 开始菜单
+- 命令行运行 `run_app.cmd`
+
+### 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+Shift+Space` | 开始/停止录音 |
+
+### 托盘菜单
+
+应用运行后会在系统托盘显示图标，右键点击可进行设置。
+
+---
+
+## 配置说明
+
+在托盘图标右键菜单中打开「设置」，可配置以下选项：
+
+| 配置项 | 说明 |
+|--------|------|
+| OpenAI Base URL | API 服务地址 |
+| OpenAI API Key | API 密钥 |
+| 模型名 | 推荐 Qwen 系列 |
+
+如果不配置 API，语音转写功能仍可正常使用，但「智能去口水」功能将不可用。
+
+---
+
+## 技术规格
+
+### 模型信息
+
+| 项目 | 说明 |
+|------|------|
+| 转写模型 | SenseVoice Small（本地运行） |
+| 模型目录 | 安装目录下 `models/` |
+| 录音格式 | WAV PCM 16kHz 单声道 |
+
+### 资源占用
+
+| 项目 | 大小 |
+|------|------|
+| 安装空间 | 约 6-10 GB（含依赖和模型） |
+| GPU 显存 | 约 2-4 GB（含 VAD/标点模型） |
+
+---
 
 ## 常见问题
-- 快捷键无效：请以管理员身份运行（`keyboard` 库需要高权限）
-- 安装失败：确认 Python 安装包放在 `installer/`，以及网络可用
-- AMD 显卡：将使用 CPU 版本运行，转写速度较慢（约 10-30 秒），但功能完整
+
+### 快捷键无效怎么办？
+
+`keyboard` 库需要高权限才能全局监听键盘。请以管理员身份运行应用。
+
+### 安装失败怎么办？
+
+请检查网络是否正常，模型下载需要联网。
+
+### AMD 显卡能用吗？
+
+**不建议使用**。本项目针对 NVIDIA 显卡优化，AMD 显卡存在兼容性问题。如无 NVIDIA 显卡，程序会回退到 CPU 模式，转写速度较慢（约 10-30 秒）。
+
+---
+
+如有其他问题，欢迎提交 Issue 反馈。
