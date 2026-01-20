@@ -23,6 +23,8 @@ InfoBeforeFile=info_before.txt
 ; 不需要管理员权限
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+SetupIconFile=..\assets\icon_setup.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"

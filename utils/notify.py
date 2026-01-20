@@ -20,7 +20,7 @@ def _send_toast(title: str, message: str) -> None:
     try:
         _win11toast(title, message, duration="short")
     except Exception as e:
-        # HResult 错误或其他 COM 问题，静默降级
+        # HResult 错误或其他 COM 问题，静默禁用 Toast
         error_str = str(e)
         if "HResult" in error_str or "-2143420140" in error_str:
             logging.debug("Toast 通知不可用 (HResult error)，已禁用")
@@ -30,12 +30,11 @@ def _send_toast(title: str, message: str) -> None:
 
 
 def notify(title: str, message: str) -> None:
-    """发送通知，优先使用 Windows Toast，失败则降级为日志"""
+    """发送通知，仅尝试 Windows Toast，不弹其他窗口"""
     logging.info("通知: %s - %s", title, message)
-    
+
     if not _toast_available or _win11toast is None:
         return
-    
-    # 在后台线程发送，避免阻塞
+
     t = threading.Thread(target=_send_toast, args=(title, message), daemon=True)
     t.start()

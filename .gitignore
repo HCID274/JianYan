@@ -20,3 +20,7 @@ installer/*.isl
 /*.md
 !/README.md
 !/README.bak
+build.cmd
+scripts/clean_secrets.py
+scripts/convert_icon.py
+AGENTS.md
