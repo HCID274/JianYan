@@ -257,7 +257,7 @@ class TrayApp:
 
     def _preload_model(self) -> None:
         try:
-            preload_model()
+            preload_model(self.state.config)
             self.state.model_ready = True
             notify("模型就绪", "本地语音模型已加载完成")
         except Exception as exc:

@@ -1,5 +1,5 @@
 ﻿#define MyAppName "简言"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.11"
 #define MyAppPublisher "LHQ"
 #define MyAppExeName "Jianyan.exe"
 ; onedir 模式，EXE 在 dist/Jianyan/ 目录下
@@ -53,10 +53,9 @@ Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Code]
-
 function IsSystemProtectedDir(Path: string): Boolean;
 var
   lowerPath: string;

@@ -19,6 +19,7 @@ except Exception:  # pragma: no cover - optional dependency
     rich_transcription_postprocess = None
 
 from utils.config import AppConfig
+from utils.paths import get_model_cache_dir
 
 
 @dataclass
@@ -30,6 +31,7 @@ class LocalModelConfig:
 
 _MODEL_LOCK = threading.Lock()
 _MODEL: Optional[AutoModel] = None
+_MODEL_CACHE_KEY: str | None = None
 
 
 def transcribe_audio(audio_bytes: bytes | None, temp_path: str | None, config: AppConfig) -> str:
@@ -49,7 +51,7 @@ def transcribe_audio(audio_bytes: bytes | None, temp_path: str | None, config: A
     if audio.ndim > 1:
         audio = np.mean(audio, axis=1)
 
-    model = _get_model()
+    model = _get_model(config)
     result = model.generate(
         input=audio,
         language="auto",
@@ -62,8 +64,8 @@ def transcribe_audio(audio_bytes: bytes | None, temp_path: str | None, config: A
     return _clean_transcript(rich_transcription_postprocess(text))
 
 
-def preload_model() -> None:
-    _get_model()
+def preload_model(config: AppConfig) -> None:
+    _get_model(config)
 
 
 def _load_bytes(audio_bytes: bytes | None, temp_path: str | None) -> bytes:
@@ -73,50 +75,142 @@ def _load_bytes(audio_bytes: bytes | None, temp_path: str | None) -> bytes:
     return audio_bytes or b""
 
 
-def _get_local_model_paths() -> dict[str, str | None]:
-    """检测本地是否已下载所有模型，返回各模型的本地路径"""
-    from utils.paths import APP_ROOT
-    models_base = APP_ROOT / "models" / "models" / "iic"
-    
-    paths = {
-        "model": None,
-        "vad_model": None,
-        "punc_model": None,
-    }
-    
-    # SenseVoiceSmall 主模型
-    sense_path = models_base / "SenseVoiceSmall"
-    if sense_path.exists() and (sense_path / "model.pt").exists():
-        paths["model"] = str(sense_path)
-    
-    # VAD 模型
-    vad_path = models_base / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
-    if vad_path.exists() and (vad_path / "model.pt").exists():
-        paths["vad_model"] = str(vad_path)
-    
-    # 标点模型
-    punc_path = models_base / "punc_ct-transformer_cn-en-common-vocab471067-large"
-    if punc_path.exists() and (punc_path / "model.pt").exists():
-        paths["punc_model"] = str(punc_path)
-    
+def _get_local_model_paths(config: AppConfig) -> dict[str, str | None]:
+    """检测本地是否已下载所有模型，返回各模型的本地路径。
+
+    兼容以下来源：
+    - 应用配置的 `model_cache_dir`（以及其下的常见 ModelScope 缓存布局）
+    - 用户目录默认 ModelScope 缓存：`%USERPROFILE%\\.cache\\modelscope\\hub\\models\\...`
+
+    说明：打包版通常不包含 `modelscope` 包，因此必须尽量走“本地路径加载”，避免触发在线下载逻辑。
+    """
+
+    def _existing_model_dir(candidate: Path) -> Path | None:
+        if candidate.exists() and (candidate / "model.pt").exists():
+            return candidate
+        return None
+
+    def _candidate_roots() -> list[Path]:
+        roots: list[Path] = []
+
+        # 1) 配置目录（默认值来自 utils.paths.get_model_cache_dir）
+        cache_root = Path(config.model_cache_dir) if config.model_cache_dir else get_model_cache_dir()
+        roots.append(cache_root)
+
+        # 2) 环境变量（可能由 app/main.py 设置）
+        env_cache = os.environ.get("MODELSCOPE_CACHE")
+        if env_cache:
+            roots.append(Path(env_cache))
+
+        # 3) 用户目录默认缓存（通常已存在）
+        roots.append(Path.home() / ".cache" / "modelscope")
+
+        # 去重 + 过滤空
+        seen: set[str] = set()
+        uniq: list[Path] = []
+        for r in roots:
+            s = str(r.resolve()) if r.exists() else str(r)
+            if s in seen:
+                continue
+            seen.add(s)
+            uniq.append(r)
+        return uniq
+
+    def _candidate_iic_bases(root: Path) -> list[Path]:
+        # 常见布局：
+        # - <root>/hub/models/iic/<ModelName>
+        # - <root>/models/iic/<ModelName>            (某些自定义方式)
+        # - <root>/models/models/iic/<ModelName>     (历史遗留)
+        # - <root>/iic/<ModelName>                   (手动平铺)
+        return [
+            root / "hub" / "models" / "iic",
+            root / "models" / "iic",
+            root / "models" / "models" / "iic",
+            root / "iic",
+        ]
+
+    def _find_first(names: list[str]) -> Path | None:
+        for root in _candidate_roots():
+            for base in _candidate_iic_bases(root):
+                for name in names:
+                    found = _existing_model_dir(base / name)
+                    if found:
+                        return found
+            # 同时支持“直接在 root 下放模型目录”的情况
+            for name in names:
+                found = _existing_model_dir(root / name)
+                if found:
+                    return found
+        return None
+
+    paths: dict[str, str | None] = {"model": None, "vad_model": None, "punc_model": None}
+
+    sense_dir = _find_first(["SenseVoiceSmall"])
+    if sense_dir:
+        paths["model"] = str(sense_dir)
+
+    vad_dir = _find_first(["speech_fsmn_vad_zh-cn-16k-common-pytorch", "fsmn-vad"])
+    if vad_dir:
+        paths["vad_model"] = str(vad_dir)
+
+    punc_dir = _find_first(["punc_ct-transformer_cn-en-common-vocab471067-large", "ct-punc"])
+    if punc_dir:
+        paths["punc_model"] = str(punc_dir)
+
     return paths
 
 
-def _get_model() -> AutoModel:
+def _get_model(config: AppConfig) -> AutoModel:
     global _MODEL
+    global _MODEL_CACHE_KEY
     if AutoModel is None:
         raise RuntimeError("未安装 funasr，请先安装本地模型依赖")
+
+    cache_key = config.model_cache_dir or ""
+    if _MODEL is not None and _MODEL_CACHE_KEY is not None and _MODEL_CACHE_KEY != cache_key:
+        # 配置变更时重载（例如用户在设置中修改了模型目录）
+        _MODEL = None
+        _MODEL_CACHE_KEY = None
+
     if _MODEL is None:
         with _MODEL_LOCK:
             if _MODEL is None:
                 model_cfg = LocalModelConfig()
-                local_paths = _get_local_model_paths()
-                
-                # 优先使用本地路径，否则使用默认名称（会自动下载）
-                model_path = local_paths["model"] or model_cfg.model
-                vad_path = local_paths["vad_model"] or model_cfg.vad_model
-                punc_path = local_paths["punc_model"] or model_cfg.punc_model
-                
+                local_paths = _get_local_model_paths(config)
+
+                model_path = local_paths["model"]
+                vad_path = local_paths["vad_model"]
+                punc_path = local_paths["punc_model"]
+
+                # 若缺失本地模型：
+                # - 开发环境可依赖 modelscope 自动下载
+                # - 打包版通常不包含 modelscope，应给出明确提示
+                if not model_path or not vad_path or not punc_path:
+                    try:
+                        import modelscope  # noqa: F401
+                        allow_download = True
+                    except Exception:
+                        allow_download = False
+
+                    if allow_download:
+                        model_path = model_path or model_cfg.model
+                        vad_path = vad_path or model_cfg.vad_model
+                        punc_path = punc_path or model_cfg.punc_model
+                    else:
+                        missing = []
+                        if not model_path:
+                            missing.append("SenseVoiceSmall")
+                        if not vad_path:
+                            missing.append("VAD(fsmn-vad)")
+                        if not punc_path:
+                            missing.append("标点(ct-punc)")
+                        raise RuntimeError(
+                            "本地模型未就绪（缺少: "
+                            + ", ".join(missing)
+                            + "）。请先在开发环境运行 `python scripts/predownload_models.py` 下载模型，"
+                            "或将已下载的 ModelScope 缓存目录复制到“设置-模型缓存目录”。"
+                        )
+
                 _MODEL = AutoModel(
                     model=model_path,
                     vad_model=vad_path,
@@ -127,6 +221,7 @@ def _get_model() -> AutoModel:
                     disable_update=True,  # 禁用更新检查
                     check_latest=False,  # 禁止联网检查模型更新
                 )
+                _MODEL_CACHE_KEY = cache_key
     return _MODEL
 
 

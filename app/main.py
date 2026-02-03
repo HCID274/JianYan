@@ -39,7 +39,7 @@ def main() -> None:
     from tray.tray_app import run_tray
     from ui.startup_win32 import show_startup_progress
 
-    ok, error = show_startup_progress(preload_model, estimate_seconds=120)
+    ok, error = show_startup_progress(lambda: preload_model(config), estimate_seconds=120)
     if not ok:
         notify("模型加载失败", error or "未知错误")
         return

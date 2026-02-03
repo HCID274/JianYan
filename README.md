@@ -59,7 +59,8 @@
 
 | 依赖 | 要求 |
 |------|------|
-| Python | 3.10.13 |
+| uv | 0.9+（[安装指南](https://docs.astral.sh/uv/getting-started/installation/)） |
+| Python | 3.10.x（由 uv 自动管理） |
 | 显卡驱动 | NVIDIA 驱动（支持 CUDA 加速） |
 | 操作系统 | Windows 10/11 |
 
@@ -71,31 +72,28 @@
 install.cmd
 ```
 
-**方式二：手动安装**
+**方式二：手动安装（使用 uv）**
 
 ```cmd
-# 1. 创建虚拟环境
-py -3.10 -m venv .venv
+# 1. 创建虚拟环境（指定 Python 3.10）
+uv venv --python 3.10
 
-# 2. 激活虚拟环境
-.\.venv\Scripts\activate
+# 2. 安装 PyTorch（CUDA 版）
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# 3. 安装 PyTorch（CUDA 版）
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# 3. 安装其他依赖
+uv pip install -r requirements.txt
 
-# 4. 安装其他依赖
-pip install -r requirements.txt
-
-# 5. 下载模型
-python scripts\predownload_models.py
+# 4. 下载模型
+uv run python scripts\predownload_models.py
 ```
 
 ### 构建安装包
 
-1. 确保已安装 Python 3.10.13
+1. 确保已用 uv 配置好环境
 2. 安装 [Inno Setup](https://jrsoftware.org/isinfo.php)
-3. 用 Inno Setup 打开并编译：`installer\setup.iss`
-4. 生成的安装包位于：`installer\output\AudioToTextSetup.exe`
+3. 运行打包脚本：`build.cmd`
+4. 生成的安装包位于：`installer\output\JianyanSetup_x.x.x.exe`
 
 ---
 

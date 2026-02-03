@@ -9,10 +9,7 @@ dist/
 data/config.json
 run.log
 *.log
-installer/output/
-installer/installer/output/
-installer/*.exe
-installer/*.isl
+installer/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -20,8 +17,10 @@ installer/*.isl
 /*.md
 !/README.md
 !/README.bak
-build.cmd
-scripts/clean_secrets.py
-scripts/convert_icon.py
 AGENTS.md
 private_files/
+.codex/
+.specify/
+test_nuitka.dist/
+build.cmd
+scripts/auto_install_debug.ps1
