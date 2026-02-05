@@ -34,7 +34,7 @@
 
 下载全量安装包 `JianyanSetup_full_x.x.x.exe`（约 3GB+），内含模型权重与可执行程序。
 
-下载地址：https://jianyan.hcid274.xyz/downloads/
+下载地址：https://jianyan.hcid274.xyz/
 
 ### 2. 运行安装
 
