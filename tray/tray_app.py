@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -15,10 +16,19 @@ from audio.recorder import Recorder, RecordingResult
 from hotkey.listener import start_hotkey_listener, stop_hotkey_listener
 from output.paste import write_clipboard, write_clipboard_and_paste
 from ui.llm_prompt import show_llm_auth_error_dialog, show_missing_llm_config_dialog
+from ui.update_prompt import prompt_update
 from ui.settings import show_settings_window
 from utils.config import AppConfig, save_config
 from utils.notify import notify
 from utils.sounds import play_busy_sound, play_processing_sound, play_start_sound, play_stop_sound
+from utils.updater import (
+    download_package,
+    fetch_latest_update_info,
+    launch_silent_installer,
+    load_update_state,
+    save_update_state,
+    should_prompt_update,
+)
 
 
 class TrayApp:
@@ -53,6 +63,7 @@ class TrayApp:
                     enabled=lambda item: bool(self.state.last_clean_text),
                 ),
                 pystray.MenuItem("设置", self._on_settings),
+                pystray.MenuItem("检查更新", self._on_check_update),
                 pystray.MenuItem("退出", self._on_exit),
             ),
         )
@@ -68,9 +79,67 @@ class TrayApp:
 
         if not self.state.model_ready and not self.state.model_error:
             self._start_model_preload()
-        
+
+        self._start_update_check(force_prompt=False)
+
         logging.info("[TrayApp] 开始运行托盘图标...")
         self.icon.run()
+
+    def _start_update_check(self, *, force_prompt: bool) -> None:
+        def _runner() -> None:
+            try:
+                self._check_for_updates(force_prompt=force_prompt)
+            except Exception:
+                logging.exception("[Updater] 更新检查失败")
+
+        threading.Thread(target=_runner, daemon=True).start()
+
+    def _check_for_updates(self, *, force_prompt: bool) -> None:
+        state = load_update_state()
+        info = fetch_latest_update_info()
+        state.last_checked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        save_update_state(state)
+
+        if not info:
+            if force_prompt:
+                notify("检查更新", "暂时无法连接更新服务器")
+            return
+
+        if not should_prompt_update(info, state, force_prompt=force_prompt):
+            if force_prompt:
+                notify("检查更新", "当前已是最新版本")
+            return
+
+        result = prompt_update(info.version, info.notes)
+        if result.action == "skip_version":
+            state.skip_version = info.version
+            state.remind_at = None
+            save_update_state(state)
+            return
+        if result.action == "remind_later":
+            # 默认 24 小时后再提示
+            remind_ts = time.time() + 24 * 60 * 60
+            state.remind_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(remind_ts))
+            save_update_state(state)
+            return
+
+        try:
+            installer = download_package(info.update_pkg, info.version, "update")
+        except Exception as exc:
+            logging.exception("[Updater] 下载更新包失败")
+            notify("更新失败", f"下载更新包失败: {exc}")
+            return
+
+        try:
+            notify("正在更新", "将自动安装新版本并重启")
+            launch_silent_installer(installer)
+        except Exception as exc:
+            logging.exception("[Updater] 启动安装包失败")
+            notify("更新失败", f"启动安装包失败: {exc}")
+            return
+
+        # 退出当前实例，避免文件占用导致更新失败
+        self._exit_app()
 
     def toggle_recording(self) -> None:
         logging.info("[TrayApp] toggle_recording 被调用")
@@ -174,7 +243,8 @@ class TrayApp:
             raw_text = transcribe_audio(result.wav_bytes, result.temp_path, self.state.config).strip()
             # 本地预处理：去除连续重复的标点符号
             raw_text = preprocess_text(raw_text)
-            logging.info("[TrayApp] 转写完成, 原始文本: %s", raw_text[:200] if raw_text else "(空)")
+            # 避免在日志中记录用户的转写内容（可能包含敏感信息）
+            logging.info("[TrayApp] 转写完成, 文本长度=%d", len(raw_text) if raw_text else 0)
         except Exception as exc:
             logging.exception("转写失败")
             progress_stop.set()
@@ -214,7 +284,8 @@ class TrayApp:
         clean_text_result = raw_text
         try:
             clean_text_result = clean_text(raw_text, self.state.config).strip() or raw_text
-            logging.info("[TrayApp] LLM 整理完成, 结果: %s", clean_text_result[:200] if clean_text_result else "(空)")
+            # 避免在日志中记录用户内容
+            logging.info("[TrayApp] LLM 整理完成, 文本长度=%d", len(clean_text_result) if clean_text_result else 0)
         except Exception as exc:
             logging.exception("LLM 整理失败")
             if "Missing Qwen Base URL or API Key" in str(exc):
@@ -308,13 +379,22 @@ class TrayApp:
         self._open_settings_window()
 
     def _on_exit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        self._exit_app()
+
+    def _exit_app(self) -> None:
         stop_hotkey_listener()
         if self.state.is_recording:
             try:
                 self._recorder.stop()
             except Exception:
                 logging.exception("停止录音失败")
-        icon.stop()
+        try:
+            self.icon.stop()
+        except Exception:
+            pass
+
+    def _on_check_update(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        self._start_update_check(force_prompt=True)
 
     def _handle_missing_llm_config(self) -> None:
         if self.state.config.suppress_missing_llm_prompt:

@@ -32,9 +32,9 @@
 
 ### 1. 下载安装包
 
-下载 `JianyanSetup_0.1.0.exe`（约 3.3GB），内含模型权重、Python 虚拟环境与可执行程序。
+下载全量安装包 `JianyanSetup_full_x.x.x.exe`（约 3GB+），内含模型权重与可执行程序。
 
-下载地址：https://jianyan.hcid274.xyz/downloads/JianyanSetup_0.1.0.exe
+下载地址：https://jianyan.hcid274.xyz/downloads/
 
 ### 2. 运行安装
 

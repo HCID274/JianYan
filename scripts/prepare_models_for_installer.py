@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +45,17 @@ def _ensure_model_ready(path: Path, label: str) -> None:
         raise SystemExit(f"[ERROR] 未找到模型目录: {label}: {path}")
     if not (path / "model.pt").exists():
         raise SystemExit(f"[ERROR] 模型目录缺少 model.pt: {label}: {path}")
+
+
+def _rmtree_force(path: Path) -> None:
+    def _onerror(func, p, exc_info):  # type: ignore[no-untyped-def]
+        try:
+            Path(p).chmod(stat.S_IWRITE)
+        except Exception:
+            pass
+        func(p)
+
+    shutil.rmtree(path, onerror=_onerror)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -110,7 +122,9 @@ def main() -> None:
         print(f"  from: {src}")
         print(f"  to  : {dst}")
         if not args.dry_run:
-            shutil.copytree(src, dst, dirs_exist_ok=True)
+            if dst.exists():
+                _rmtree_force(dst)
+            shutil.copytree(src, dst)
 
     print()
     if args.dry_run:
