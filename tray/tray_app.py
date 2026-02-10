@@ -49,30 +49,70 @@ class TrayApp:
         self.icon = pystray.Icon(
             "audio_to_text",
             self._icons["idle"],
-            "语音转文字",
-            menu=pystray.Menu(
-                pystray.MenuItem("开始/停止录音", self._on_toggle),
-                pystray.MenuItem(
-                    "复制原始文本",
-                    self._on_copy_raw,
-                    enabled=lambda item: bool(self.state.last_raw_text),
-                ),
-                pystray.MenuItem(
-                    "复制整理文本",
-                    self._on_copy_clean,
-                    enabled=lambda item: bool(self.state.last_clean_text),
-                ),
-                pystray.MenuItem("设置", self._on_settings),
-                pystray.MenuItem("检查更新", self._on_check_update),
-                pystray.MenuItem("退出", self._on_exit),
-            ),
+            self._build_tray_title(),
+            menu=self._build_menu(),
         )
+
+    def _build_tray_title(self) -> str:
+        hotkey_label = _format_hotkey_for_display(self.state.config.hotkey)
+        if hotkey_label:
+            return f"语音转文字 ({hotkey_label})"
+        return "语音转文字"
+
+    def _build_menu(self) -> pystray.Menu:
+        hotkey_label = _format_hotkey_for_display(self.state.config.hotkey)
+        toggle_label = "开始/停止录音"
+        if hotkey_label:
+            toggle_label = f"{toggle_label} ({hotkey_label})"
+
+        return pystray.Menu(
+            pystray.MenuItem(toggle_label, self._on_toggle),
+            pystray.MenuItem(
+                "复制原始文本",
+                self._on_copy_raw,
+                enabled=lambda item: bool(self.state.last_raw_text),
+            ),
+            pystray.MenuItem(
+                "复制整理文本",
+                self._on_copy_clean,
+                enabled=lambda item: bool(self.state.last_clean_text),
+            ),
+            pystray.MenuItem("设置", self._on_settings),
+            pystray.MenuItem("检查更新", self._on_check_update),
+            pystray.MenuItem("退出", self._on_exit),
+        )
+
+    def _refresh_hotkey_ui(self) -> None:
+        try:
+            self.icon.title = self._build_tray_title()
+            self.icon.menu = self._build_menu()
+            self.icon.update_menu()
+        except Exception:
+            logging.debug("[TrayApp] 刷新热键 UI 失败", exc_info=True)
+
+    def _maybe_show_hotkey_hint(self) -> None:
+        if not self.state.config.show_hotkey_hint_on_startup:
+            return
+
+        hotkey_label = _format_hotkey_for_display(self.state.config.hotkey)
+        if hotkey_label:
+            notify("快捷键提示", f"按 {hotkey_label} 开始/停止录音")
+        else:
+            notify("快捷键提示", "可在配置中设置快捷键")
+
+        try:
+            self.state.config.show_hotkey_hint_on_startup = False
+            save_config(self.state.config)
+        except Exception:
+            logging.debug("[TrayApp] 写入快捷键提示状态失败", exc_info=True)
 
     def run(self) -> None:
         logging.info("[TrayApp] 应用启动...")
         try:
             start_hotkey_listener(self.toggle_recording, self.state.config.hotkey)
             logging.info("[TrayApp] 快捷键监听已启动: %s", self.state.config.hotkey)
+            self._refresh_hotkey_ui()
+            self._maybe_show_hotkey_hint()
         except Exception as exc:
             logging.exception("[TrayApp] 注册热键失败")
             notify("快捷键错误", f"注册热键失败: {exc}")
@@ -459,6 +499,7 @@ class TrayApp:
             start_hotkey_listener(self.toggle_recording, new_config.hotkey)
         except Exception as exc:
             notify("快捷键错误", f"注册热键失败: {exc}")
+        self._refresh_hotkey_ui()
 
     def _update_icon(self) -> None:
         """更新托盘图标（不获取锁，因为可能在锁内被调用）"""
@@ -563,6 +604,88 @@ def _create_progress_icon(progress: float, size: int = 64) -> Image.Image:
     draw.text((text_x, text_y), percent_text, fill="#ffffff")
     
     return image
+
+
+def _format_hotkey_for_display(hotkey: str) -> str:
+    if not hotkey:
+        return ""
+
+    tokens = [t.strip().lower() for t in hotkey.split("+") if t.strip()]
+    if not tokens:
+        return ""
+
+    has_ctrl = False
+    has_shift = False
+    has_alt = False
+    has_win = False
+    keys: list[str] = []
+
+    key_map = {
+        "space": "Space",
+        "tab": "Tab",
+        "enter": "Enter",
+        "return": "Enter",
+        "esc": "Esc",
+        "escape": "Esc",
+        "backspace": "Backspace",
+        "delete": "Delete",
+        "del": "Delete",
+        "insert": "Insert",
+        "ins": "Insert",
+        "home": "Home",
+        "end": "End",
+        "pageup": "PageUp",
+        "pgup": "PageUp",
+        "pagedown": "PageDown",
+        "pgdn": "PageDown",
+        "up": "Up",
+        "down": "Down",
+        "left": "Left",
+        "right": "Right",
+    }
+
+    for t in tokens:
+        if t in {"ctrl", "control"}:
+            has_ctrl = True
+            continue
+        if t == "shift":
+            has_shift = True
+            continue
+        if t in {"alt", "menu"}:
+            has_alt = True
+            continue
+        if t in {"win", "windows"}:
+            has_win = True
+            continue
+
+        if t in key_map:
+            keys.append(key_map[t])
+            continue
+
+        if len(t) == 1 and t.isalnum():
+            keys.append(t.upper())
+            continue
+
+        if t.startswith("f") and t[1:].isdigit():
+            n = int(t[1:])
+            if 1 <= n <= 24:
+                keys.append(f"F{n}")
+                continue
+
+        keys.append(t)
+
+    parts: list[str] = []
+    if has_ctrl:
+        parts.append("Ctrl")
+    if has_shift:
+        parts.append("Shift")
+    if has_alt:
+        parts.append("Alt")
+    if has_win:
+        parts.append("Win")
+
+    parts.extend(keys)
+    return "+".join(parts)
 
 
 def run_tray(state: AppState) -> None:

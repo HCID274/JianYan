@@ -6,5 +6,6 @@
   "openai_api_key": "",
   "openai_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
   "qwen_model": "qwen-flash",
-  "suppress_missing_llm_prompt": false
+  "suppress_missing_llm_prompt": false,
+  "show_hotkey_hint_on_startup": true
 }

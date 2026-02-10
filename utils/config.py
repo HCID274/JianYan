@@ -22,6 +22,7 @@ class AppConfig:
     openai_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     qwen_model: str = "qwen-flash"
     suppress_missing_llm_prompt: bool = False
+    show_hotkey_hint_on_startup: bool = True
 
 
 def load_config() -> AppConfig:
@@ -104,6 +105,7 @@ def _coerce_config(config: AppConfig) -> AppConfig:
         or "https://dashscope.aliyuncs.com/compatible-mode/v1",
         qwen_model=_as_str(config.qwen_model, "qwen-flash").strip() or "qwen-flash",
         suppress_missing_llm_prompt=_as_bool(config.suppress_missing_llm_prompt, False),
+        show_hotkey_hint_on_startup=_as_bool(getattr(config, "show_hotkey_hint_on_startup", True), True),
     )
 
 

@@ -117,6 +117,8 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
             openai_base_url=base_url,
             openai_api_key=api_key,
             qwen_model=qwen_model_var.get().strip() or config.qwen_model,
+            suppress_missing_llm_prompt=config.suppress_missing_llm_prompt,
+            show_hotkey_hint_on_startup=config.show_hotkey_hint_on_startup,
         )
         root.destroy()
 
