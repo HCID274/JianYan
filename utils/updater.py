@@ -158,8 +158,8 @@ def _load_manifest(url: str, timeout_s: float = 6.0) -> dict[str, Any]:
         return r.json()
 
 
-def fetch_latest_update_info() -> Optional[UpdateInfo]:
-    urls = _manifest_urls_from_env() or DEFAULT_MANIFEST_URLS
+def fetch_latest_update_info(*, manifest_urls: Optional[tuple[str, ...]] = None) -> Optional[UpdateInfo]:
+    urls = manifest_urls or _manifest_urls_from_env() or DEFAULT_MANIFEST_URLS
     last_err: Exception | None = None
     for url in urls:
         try:
@@ -209,6 +209,7 @@ def fetch_latest_update_info() -> Optional[UpdateInfo]:
                 raise ValueError("manifest missing update package fields")
             if not info.full_pkg.sha256 or not info.full_pkg.urls:
                 raise ValueError("manifest missing full package fields")
+            logging.info("[Updater] manifest OK: %s", url)
             return info
         except Exception as exc:
             last_err = exc

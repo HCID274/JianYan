@@ -5,7 +5,7 @@ import time
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
-from utils.paths import get_data_dir, get_model_cache_dir, get_temp_dir, require_writable_dir
+from utils.paths import ensure_dir_exists, get_data_dir, get_model_cache_dir, get_temp_dir, require_writable_dir
 
 
 def _get_config_path() -> Path:
@@ -23,6 +23,7 @@ class AppConfig:
     qwen_model: str = "qwen-flash"
     suppress_missing_llm_prompt: bool = False
     show_hotkey_hint_on_startup: bool = True
+    update_manifest_urls: str = ""
 
 
 def load_config() -> AppConfig:
@@ -53,8 +54,8 @@ def load_config() -> AppConfig:
     filtered = {k: v for k, v in data.items() if k in valid_keys}
     config = AppConfig(**filtered)
     config = _coerce_config(config)
-    config.temp_dir = _resolve_dir(config.temp_dir, get_temp_dir(), "临时文件")
-    config.model_cache_dir = _resolve_dir(config.model_cache_dir, get_model_cache_dir(), "模型缓存")
+    config.temp_dir = _resolve_dir(config.temp_dir, get_temp_dir(), "临时文件", require_writable=True)
+    config.model_cache_dir = _resolve_dir(config.model_cache_dir, get_model_cache_dir(), "模型缓存", require_writable=False)
     return config
 
 
@@ -106,16 +107,20 @@ def _coerce_config(config: AppConfig) -> AppConfig:
         qwen_model=_as_str(config.qwen_model, "qwen-flash").strip() or "qwen-flash",
         suppress_missing_llm_prompt=_as_bool(config.suppress_missing_llm_prompt, False),
         show_hotkey_hint_on_startup=_as_bool(getattr(config, "show_hotkey_hint_on_startup", True), True),
+        update_manifest_urls=_as_str(getattr(config, "update_manifest_urls", ""), "").strip(),
     )
 
 
-def _resolve_dir(value: str, fallback: Path, label: str) -> str:
+def _resolve_dir(value: str, fallback: Path, label: str, *, require_writable: bool) -> str:
     if not value:
         return str(fallback)
     path = Path(value)
     if not path.is_absolute():
         path = fallback.parent / path
-    require_writable_dir(path, label)
+    if require_writable:
+        require_writable_dir(path, label)
+    else:
+        ensure_dir_exists(path, label)
     return str(path)
 
 

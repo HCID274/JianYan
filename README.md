@@ -95,6 +95,14 @@ uv run python scripts\predownload_models.py
 3. 运行打包脚本：`build.cmd`
 4. 生成的安装包位于：`installer\output\JianyanSetup_x.x.x.exe`
 
+#### 自动发布（可选）
+
+如果你的服务器实现了分片上传与发布接口（`/api/upload/*` + `/api/release/publish`），可以用一条命令完成：上传 full/update + 发布 + 清理旧版本。
+
+1. 复制 `publish_env.example.cmd` 为 `publish_env.local.cmd`（此文件已在 `.gitignore` 中忽略）
+2. 填入 `UPLOAD_API_BASES` 和 `UPLOAD_TOKEN`
+3. 运行：`publish.cmd`
+
 ---
 
 ## 使用教程

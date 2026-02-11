@@ -42,14 +42,21 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
     max_seconds_var = tk.StringVar(value=str(config.max_seconds))
     tk.Entry(root, textvariable=max_seconds_var, width=40).grid(row=0, column=1, padx=10, pady=6)
 
-    tk.Label(root, text="OpenAI Base URL").grid(row=1, column=0, sticky="w", padx=10, pady=6)
-    base_url_var = tk.StringVar(value=config.openai_base_url)
-    tk.Entry(root, textvariable=base_url_var, width=40).grid(row=1, column=1, padx=10, pady=6)
+    tk.Label(root, text="更新源 latest.json（可选）").grid(row=1, column=0, sticky="w", padx=10, pady=6)
+    update_urls_var = tk.StringVar(value=config.update_manifest_urls)
+    tk.Entry(root, textvariable=update_urls_var, width=40).grid(row=1, column=1, padx=10, pady=6)
+    tk.Label(root, text="多个地址用 ; 分隔，必须是 https。留空则使用内置默认源。", fg="#666666").grid(
+        row=2, column=0, columnspan=3, sticky="w", padx=10, pady=4
+    )
 
-    tk.Label(root, text="OpenAI API Key").grid(row=2, column=0, sticky="w", padx=10, pady=6)
+    tk.Label(root, text="OpenAI Base URL").grid(row=3, column=0, sticky="w", padx=10, pady=6)
+    base_url_var = tk.StringVar(value=config.openai_base_url)
+    tk.Entry(root, textvariable=base_url_var, width=40).grid(row=3, column=1, padx=10, pady=6)
+
+    tk.Label(root, text="OpenAI API Key").grid(row=4, column=0, sticky="w", padx=10, pady=6)
     api_key_var = tk.StringVar(value=config.openai_api_key)
     api_key_entry = tk.Entry(root, textvariable=api_key_var, width=40, show="*")
-    api_key_entry.grid(row=2, column=1, padx=10, pady=6)
+    api_key_entry.grid(row=4, column=1, padx=10, pady=6)
 
     show_key_var = tk.BooleanVar(value=False)
 
@@ -57,15 +64,15 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
         api_key_entry.configure(show="" if show_key_var.get() else "*")
 
     tk.Checkbutton(root, text="显示", variable=show_key_var, command=toggle_key_visibility).grid(
-        row=2, column=2, padx=0, pady=6
+        row=4, column=2, padx=0, pady=6
     )
 
-    tk.Label(root, text="模型名").grid(row=3, column=0, sticky="w", padx=10, pady=6)
+    tk.Label(root, text="模型名").grid(row=5, column=0, sticky="w", padx=10, pady=6)
     qwen_model_var = tk.StringVar(value=config.qwen_model)
-    tk.Entry(root, textvariable=qwen_model_var, width=40).grid(row=3, column=1, padx=10, pady=6)
+    tk.Entry(root, textvariable=qwen_model_var, width=40).grid(row=5, column=1, padx=10, pady=6)
 
     tk.Label(root, text="支持所有 OpenAI 兼容服务，推荐使用 Qwen。", fg="#666666").grid(
-        row=4, column=0, columnspan=3, sticky="w", padx=10, pady=4
+        row=6, column=0, columnspan=3, sticky="w", padx=10, pady=4
     )
 
     def _test_connection() -> None:
@@ -114,6 +121,7 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
             max_seconds=max_seconds,
             temp_dir=config.temp_dir,
             model_cache_dir=config.model_cache_dir,
+            update_manifest_urls=update_urls_var.get().strip(),
             openai_base_url=base_url,
             openai_api_key=api_key,
             qwen_model=qwen_model_var.get().strip() or config.qwen_model,
@@ -125,9 +133,9 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
     def on_cancel() -> None:
         root.destroy()
 
-    tk.Button(root, text="测试连接", command=_test_connection, width=10).grid(row=5, column=0, padx=10, pady=10)
-    tk.Button(root, text="保存", command=on_save, width=10).grid(row=5, column=1, padx=10, pady=10, sticky="e")
-    tk.Button(root, text="取消", command=on_cancel, width=10).grid(row=5, column=2, padx=10, pady=10, sticky="e")
+    tk.Button(root, text="测试连接", command=_test_connection, width=10).grid(row=7, column=0, padx=10, pady=10)
+    tk.Button(root, text="保存", command=on_save, width=10).grid(row=7, column=1, padx=10, pady=10, sticky="e")
+    tk.Button(root, text="取消", command=on_cancel, width=10).grid(row=7, column=2, padx=10, pady=10, sticky="e")
 
 
 def _center_window(root: tk.Tk) -> None:

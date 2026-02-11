@@ -1,5 +1,6 @@
 .venv/
 .env
+publish_env.local.cmd
 temp/
 models/
 __pycache__/
@@ -24,3 +25,4 @@ private_files/
 test_nuitka.dist/
 build.cmd
 scripts/auto_install_debug.ps1
+publish.cmd

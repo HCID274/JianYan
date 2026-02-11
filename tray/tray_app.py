@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import ctypes
 import logging
 import threading
 import time
@@ -8,6 +9,7 @@ from typing import Optional
 
 import pystray
 from PIL import Image, ImageDraw
+from PIL import IcoImagePlugin  # noqa: F401
 
 from api.llm import clean_text, preprocess_text
 from api.stt import preload_model, transcribe_audio
@@ -18,8 +20,9 @@ from output.paste import write_clipboard, write_clipboard_and_paste
 from ui.llm_prompt import show_llm_auth_error_dialog, show_missing_llm_config_dialog
 from ui.update_prompt import prompt_update
 from ui.settings import show_settings_window
+from utils.console import is_pause_on_exit_enabled, pause
 from utils.config import AppConfig, save_config
-from utils.notify import notify
+from utils.notify import alert, notify
 from utils.sounds import play_busy_sound, play_processing_sound, play_start_sound, play_stop_sound
 from utils.updater import (
     download_package,
@@ -36,6 +39,7 @@ class TrayApp:
         self.state = state
         self._lock = threading.Lock()
         self._timer: Optional[threading.Timer] = None
+        self._exit_requested = False
         self._recorder = Recorder(max_seconds=state.config.max_seconds)
         self._llm_prompt_open = False
         self._settings_open = False
@@ -109,6 +113,14 @@ class TrayApp:
     def run(self) -> None:
         logging.info("[TrayApp] 应用启动...")
         try:
+            logging.info(
+                "[TrayApp] pystray=%s (%s)",
+                getattr(pystray, "__version__", "?"),
+                getattr(pystray, "__file__", "?"),
+            )
+        except Exception:
+            pass
+        try:
             start_hotkey_listener(self.toggle_recording, self.state.config.hotkey)
             logging.info("[TrayApp] 快捷键监听已启动: %s", self.state.config.hotkey)
             self._refresh_hotkey_ui()
@@ -123,31 +135,63 @@ class TrayApp:
         self._start_update_check(force_prompt=False)
 
         logging.info("[TrayApp] 开始运行托盘图标...")
-        self.icon.run()
+        try:
+            self.icon.run()
+        except Exception as exc:
+            logging.exception("[TrayApp] 托盘图标运行失败")
+            alert(
+                "托盘启动失败",
+                f"{exc}\n\n请查看日志：%LOCALAPPDATA%\\Jianyan\\logs\\run.log",
+                force_message_box=True,
+            )
+            if is_pause_on_exit_enabled():
+                pause()
+            return
+        finally:
+            logging.warning("[TrayApp] 托盘图标循环已退出 (exit_requested=%s)", self._exit_requested)
+
+        if not self._exit_requested:
+            # 这里通常意味着 pystray backend 初始化失败或被外部因素终止。
+            alert(
+                "程序已退出",
+                "托盘图标意外退出，程序已结束。\n\n请查看日志：%LOCALAPPDATA%\\Jianyan\\logs\\run.log",
+                force_message_box=True,
+            )
+            if is_pause_on_exit_enabled():
+                pause()
 
     def _start_update_check(self, *, force_prompt: bool) -> None:
+        if force_prompt:
+            # 给用户一点“点击有反应”的反馈（Toast 可用则会显示；不可用也不会阻塞）
+            try:
+                notify("检查更新", "正在检查更新...")
+            except Exception:
+                pass
+
         def _runner() -> None:
             try:
                 self._check_for_updates(force_prompt=force_prompt)
-            except Exception:
+            except Exception as exc:
                 logging.exception("[Updater] 更新检查失败")
+                if force_prompt:
+                    self._force_feedback("检查更新", f"检查更新失败: {exc}")
 
         threading.Thread(target=_runner, daemon=True).start()
 
     def _check_for_updates(self, *, force_prompt: bool) -> None:
         state = load_update_state()
-        info = fetch_latest_update_info()
+        info = fetch_latest_update_info(manifest_urls=_parse_update_manifest_urls(self.state.config.update_manifest_urls))
         state.last_checked_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         save_update_state(state)
 
         if not info:
             if force_prompt:
-                notify("检查更新", "暂时无法连接更新服务器")
+                self._force_feedback("检查更新", "无法获取更新信息：请确认 latest.json 已上传且可通过 https 访问")
             return
 
         if not should_prompt_update(info, state, force_prompt=force_prompt):
             if force_prompt:
-                notify("检查更新", "当前已是最新版本")
+                self._force_feedback("检查更新", "当前已是最新版本")
             return
 
         result = prompt_update(info.version, info.notes)
@@ -167,7 +211,10 @@ class TrayApp:
             installer = download_package(info.update_pkg, info.version, "update")
         except Exception as exc:
             logging.exception("[Updater] 下载更新包失败")
-            notify("更新失败", f"下载更新包失败: {exc}")
+            if force_prompt:
+                self._force_feedback("更新失败", f"下载更新包失败: {exc}")
+            else:
+                notify("更新失败", f"下载更新包失败: {exc}")
             return
 
         try:
@@ -175,11 +222,30 @@ class TrayApp:
             launch_silent_installer(installer)
         except Exception as exc:
             logging.exception("[Updater] 启动安装包失败")
-            notify("更新失败", f"启动安装包失败: {exc}")
+            if force_prompt:
+                self._force_feedback("更新失败", f"启动安装包失败: {exc}")
+            else:
+                notify("更新失败", f"启动安装包失败: {exc}")
             return
 
         # 退出当前实例，避免文件占用导致更新失败
         self._exit_app()
+
+    def _force_feedback(self, title: str, message: str) -> None:
+        """用户手动触发时，保证至少能看到一次反馈（Toast 不可用则退化为 MessageBox）。"""
+        try:
+            shown = bool(notify(title, message))
+        except Exception:
+            shown = False
+        if shown:
+            return
+
+        try:
+            MB_OK = 0x00000000
+            MB_ICONINFORMATION = 0x00000040
+            ctypes.windll.user32.MessageBoxW(0, message, title, MB_OK | MB_ICONINFORMATION)
+        except Exception:
+            logging.debug("[TrayApp] MessageBox 提示失败", exc_info=True)
 
     def toggle_recording(self) -> None:
         logging.info("[TrayApp] toggle_recording 被调用")
@@ -422,6 +488,7 @@ class TrayApp:
         self._exit_app()
 
     def _exit_app(self) -> None:
+        self._exit_requested = True
         stop_hotkey_listener()
         if self.state.is_recording:
             try:
@@ -686,6 +753,14 @@ def _format_hotkey_for_display(hotkey: str) -> str:
 
     parts.extend(keys)
     return "+".join(parts)
+
+
+def _parse_update_manifest_urls(raw: str) -> tuple[str, ...] | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    parts = [p.strip() for p in value.split(";") if p.strip()]
+    return tuple(parts) if parts else None
 
 
 def run_tray(state: AppState) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import stat
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +57,36 @@ def _rmtree_force(path: Path) -> None:
         func(p)
 
     shutil.rmtree(path, onerror=_onerror)
+
+
+def _is_lock_error(exc: BaseException) -> bool:
+    winerror = getattr(exc, "winerror", None)
+    return winerror == 32  # another process is using the file
+
+
+def _try_rmtree_force(path: Path, *, retries: int = 6, base_sleep_s: float = 0.2) -> bool:
+    """Best-effort delete; return False if Windows file lock prevents deletion."""
+    sleep_s = base_sleep_s
+    for attempt in range(1, retries + 1):
+        try:
+            _rmtree_force(path)
+            return True
+        except PermissionError as exc:
+            if not _is_lock_error(exc):
+                raise
+            if attempt >= retries:
+                return False
+            time.sleep(sleep_s)
+            sleep_s = min(sleep_s * 2, 2.0)
+        except OSError as exc:
+            # Some lock cases surface as OSError.
+            if not _is_lock_error(exc):
+                raise
+            if attempt >= retries:
+                return False
+            time.sleep(sleep_s)
+            sleep_s = min(sleep_s * 2, 2.0)
+    return False
 
 
 def _parse_args() -> argparse.Namespace:
@@ -123,7 +154,16 @@ def main() -> None:
         print(f"  to  : {dst}")
         if not args.dry_run:
             if dst.exists():
-                _rmtree_force(dst)
+                deleted = _try_rmtree_force(dst)
+                if not deleted:
+                    # Most common cause: app is running and has model.pt open. Reuse existing files.
+                    if (dst / "model.pt").exists():
+                        print(f"[WARN] 目标目录被占用，无法删除，将复用已有模型文件: {dst}")
+                        continue
+                    raise SystemExit(
+                        f"[ERROR] 无法删除目标模型目录（文件被占用）：{dst}\n"
+                        "请先关闭正在使用模型的程序（例如 Jianyan.exe），然后重试。"
+                    )
             shutil.copytree(src, dst)
 
     print()

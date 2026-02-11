@@ -5,7 +5,7 @@ import hashlib
 import math
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -190,10 +190,15 @@ def upload_package(
 
         start = time.time()
         done = len(already_uploaded)
+        last_progress_at = start
+        last_reported_done = done
         retries_total = 0
         retries_lock = Lock()
         shard_counts: dict[str, int] = {}
         shard_lock = Lock()
+        heartbeat_s = float(os.environ.get("UPLOAD_HEARTBEAT", "60") or "60")
+        if heartbeat_s <= 0:
+            heartbeat_s = 60.0
 
         with ThreadPoolExecutor(max_workers=effective_concurrency) as pool:
             futures = []
@@ -201,35 +206,60 @@ def upload_package(
                 base_url = _choose_base_url(base_urls, index)
                 with shard_lock:
                     shard_counts[base_url] = shard_counts.get(base_url, 0) + 1
-                futures.append(
-                    pool.submit(
-                        _upload_one_chunk,
+
+                def _runner(  # type: ignore[no-untyped-def]
+                    *, _index=index, _offset=offset, _length=length, _base_url=base_url
+                ) -> tuple[int, int]:
+                    used = _upload_one_chunk(
                         file_path=package.path,
                         upload_id=upload_id,
-                        base_url=base_url,
+                        base_url=_base_url,
                         token=token,
-                        index=index,
-                        offset=offset,
-                        length=length,
+                        index=_index,
+                        offset=_offset,
+                        length=_length,
                         timeout_s=timeout_s,
                         verify_tls=verify_tls,
                         max_retries=max_retries,
                     )
+                    return _index, int(used)
+
+                futures.append(
+                    pool.submit(
+                        _runner,
+                    )
                 )
 
-            for fut in as_completed(futures):
-                used = int(fut.result())
-                if used:
-                    with retries_lock:
-                        retries_total += used
-                done += 1
-                if done % 25 == 0 or done == total_chunks:
-                    elapsed = max(time.time() - start, 0.001)
-                    rate = (done * server_chunk_size) / elapsed
-                    print(
-                        f"[upload] {package.filename}: {done}/{total_chunks} chunks "
-                        f"({rate / (1024 * 1024):.1f} MB/s)"
-                    )
+            pending = set(futures)
+            while pending:
+                done_set, pending = wait(pending, timeout=heartbeat_s, return_when=FIRST_COMPLETED)
+                now = time.time()
+
+                if not done_set:
+                    # Heartbeat: nothing finished recently, but upload may still be retrying/backing off.
+                    stalled_for = max(now - last_progress_at, 0.0)
+                    if done != last_reported_done:
+                        last_reported_done = done
+                    else:
+                        print(f"[upload] {package.filename}: {done}/{total_chunks} chunks (no progress {stalled_for:.0f}s)")
+                    continue
+
+                for fut in done_set:
+                    index, used = fut.result()
+                    if used:
+                        with retries_lock:
+                            retries_total += used
+
+                    done += 1
+                    last_progress_at = now
+
+                    if done % 25 == 0 or done == total_chunks:
+                        elapsed = max(now - start, 0.001)
+                        rate = (done * server_chunk_size) / elapsed
+                        print(
+                            f"[upload] {package.filename}: {done}/{total_chunks} chunks "
+                            f"({rate / (1024 * 1024):.1f} MB/s)"
+                        )
 
         elapsed = max(time.time() - start, 0.001)
         avg_rate = package.size / elapsed

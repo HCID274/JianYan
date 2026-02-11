@@ -19,7 +19,7 @@ except Exception:  # pragma: no cover - optional dependency
     rich_transcription_postprocess = None
 
 from utils.config import AppConfig
-from utils.paths import get_model_cache_dir
+from utils.paths import get_bundled_models_dir, get_model_cache_dir
 
 
 @dataclass
@@ -93,16 +93,22 @@ def _get_local_model_paths(config: AppConfig) -> dict[str, str | None]:
     def _candidate_roots() -> list[Path]:
         roots: list[Path] = []
 
-        # 1) 配置目录（默认值来自 utils.paths.get_model_cache_dir）
-        cache_root = Path(config.model_cache_dir) if config.model_cache_dir else get_model_cache_dir()
-        roots.append(cache_root)
+        # 1) 配置目录（用户自定义；可能是只读的“安装包内模型目录”）
+        if config.model_cache_dir:
+            roots.append(Path(config.model_cache_dir))
 
-        # 2) 环境变量（可能由 app/main.py 设置）
+        # 2) 安装包内随带模型（可能只读，但可用于加载）
+        roots.append(get_bundled_models_dir())
+
+        # 3) 环境变量（可能由 app/main.py 设置）
         env_cache = os.environ.get("MODELSCOPE_CACHE")
         if env_cache:
             roots.append(Path(env_cache))
 
-        # 3) 用户目录默认缓存（通常已存在）
+        # 4) 默认可写缓存目录（用于下载/解压/缓存）
+        roots.append(get_model_cache_dir())
+
+        # 5) 用户目录默认缓存（通常已存在）
         roots.append(Path.home() / ".cache" / "modelscope")
 
         # 去重 + 过滤空
