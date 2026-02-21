@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 import pystray
-from PIL import Image, ImageDraw
 from PIL import IcoImagePlugin  # noqa: F401
+from PIL import Image, ImageDraw  # 原来只有 Image，补充 ImageDraw
 
 from api.llm import clean_text, preprocess_text
 from api.stt import preload_model, transcribe_audio
@@ -23,6 +23,7 @@ from ui.update_prompt import prompt_update
 from ui.settings import show_settings_window
 from utils.console import is_pause_on_exit_enabled, pause
 from utils.config import AppConfig, save_config
+from utils.image import create_progress_icon, create_tray_icon
 from utils.notify import alert, notify
 from utils.sounds import play_busy_sound, play_processing_sound, play_start_sound, play_stop_sound
 from utils.updater import (
@@ -47,9 +48,9 @@ class TrayApp:
         Path(state.config.temp_dir).mkdir(parents=True, exist_ok=True)
 
         self._icons = {
-            "idle": _create_icon("#35a853"),
-            "recording": _create_icon("#d93025"),
-            "busy": _create_icon("#f9ab00"),
+            "idle": create_tray_icon("#35a853"),
+            "recording": create_tray_icon("#d93025"),
+            "busy": create_tray_icon("#f9ab00"),
         }
         self.icon = pystray.Icon(
             "audio_to_text",
