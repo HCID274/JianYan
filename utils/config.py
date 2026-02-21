@@ -19,8 +19,8 @@ class AppConfig:
     temp_dir: str = ""
     model_cache_dir: str = ""
     openai_api_key: str = ""
-    openai_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    qwen_model: str = "qwen-flash"
+    openai_base_url: str = ""
+    qwen_model: str = ""
     suppress_missing_llm_prompt: bool = False
     show_hotkey_hint_on_startup: bool = True
     update_manifest_urls: str = ""
@@ -102,9 +102,8 @@ def _coerce_config(config: AppConfig) -> AppConfig:
         temp_dir=_as_str(config.temp_dir, ""),
         model_cache_dir=_as_str(config.model_cache_dir, ""),
         openai_api_key=_as_str(config.openai_api_key, ""),
-        openai_base_url=_as_str(config.openai_base_url, "https://dashscope.aliyuncs.com/compatible-mode/v1").strip()
-        or "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        qwen_model=_as_str(config.qwen_model, "qwen-flash").strip() or "qwen-flash",
+        openai_base_url=_as_str(config.openai_base_url, "").strip(),
+        qwen_model=_as_str(config.qwen_model, "").strip(),
         suppress_missing_llm_prompt=_as_bool(config.suppress_missing_llm_prompt, False),
         show_hotkey_hint_on_startup=_as_bool(getattr(config, "show_hotkey_hint_on_startup", True), True),
         update_manifest_urls=_as_str(getattr(config, "update_manifest_urls", ""), "").strip(),

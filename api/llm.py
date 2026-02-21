@@ -65,11 +65,12 @@ Output: "Use the default clean prompt to fix the text."
 def clean_text(text: str, config: AppConfig) -> str:
     api_key = config.openai_api_key or os.getenv("OPENAI_API_KEY")
     base_url = config.openai_base_url or os.getenv("OPENAI_BASE_URL")
-    model = config.qwen_model or os.getenv("QWEN_MODEL", "qwen-flash")
-    if not api_key or not base_url:
-        raise RuntimeError("Missing Qwen Base URL or API Key")
+    model = config.qwen_model or os.getenv("QWEN_MODEL") or "qwen-flash"
+    if not api_key:
+        raise RuntimeError("Missing OpenAI API Key")
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    # If base_url is empty, OpenAI SDK will use its default (https://api.openai.com/v1)
+    client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
     response = client.chat.completions.create(
         model=model,
         messages=[

@@ -71,7 +71,7 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
     qwen_model_var = tk.StringVar(value=config.qwen_model)
     tk.Entry(root, textvariable=qwen_model_var, width=40).grid(row=5, column=1, padx=10, pady=6)
 
-    tk.Label(root, text="支持所有 OpenAI 兼容服务，推荐使用 Qwen。", fg="#666666").grid(
+    tk.Label(root, text="支持所有 OpenAI 兼容服务，推荐使用 Qwen。留空 Base URL 则使用 OpenAI 官方接口。", fg="#666666").grid(
         row=6, column=0, columnspan=3, sticky="w", padx=10, pady=4
     )
 
@@ -79,8 +79,8 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
         base_url = base_url_var.get().strip()
         api_key = api_key_var.get().strip()
         model = qwen_model_var.get().strip() or config.qwen_model
-        if not base_url or not api_key:
-            messagebox.showerror("错误", "请先填写 OpenAI Base URL 和 API Key", parent=root)
+        if not api_key:
+            messagebox.showerror("错误", "请先填写 API Key", parent=root)
             return
 
         def _worker() -> None:
@@ -112,8 +112,8 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
         base_url = base_url_var.get().strip()
         api_key = api_key_var.get().strip()
 
-        if not base_url or not api_key:
-            messagebox.showerror("错误", "请填写 OpenAI Base URL 和 API Key", parent=root)
+        if not api_key:
+            messagebox.showerror("错误", "请填写 OpenAI API Key", parent=root)
             return
 
         result["config"] = AppConfig(
