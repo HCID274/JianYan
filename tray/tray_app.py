@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import ctypes
+import functools
 import logging
 import threading
 import time
@@ -584,7 +585,9 @@ class TrayApp:
     def _update_progress(self, progress: float) -> None:
         """更新进度图标 (0.0 - 1.0)"""
         try:
-            self.icon.icon = _create_progress_icon(progress)
+            # 离散化进度为整数百分比 (0-100) 以利用缓存
+            percent = int(round(progress * 100))
+            self.icon.icon = _create_progress_icon(percent)
         except Exception as e:
             logging.debug("[TrayApp] 更新进度图标失败: %s", e)
 
@@ -598,13 +601,15 @@ def _create_icon(color: str) -> Image.Image:
     return image
 
 
-def _create_progress_icon(progress: float, size: int = 64) -> Image.Image:
+@functools.lru_cache(maxsize=128)
+def _create_progress_icon(percent: int, size: int = 64) -> Image.Image:
     """创建带有圆弧进度条的图标
     
     Args:
-        progress: 进度值 0.0 - 1.0
+        percent: 进度百分比 0 - 100
         size: 图标尺寸
     """
+    progress = percent / 100.0
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     
