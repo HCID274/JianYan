@@ -30,16 +30,26 @@ DEFAULT_MANIFEST_URLS = (
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _parse_version(v: str) -> tuple[int, int, int]:
-    parts = v.strip().split(".")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid version: {v!r}")
-    return int(parts[0]), int(parts[1]), int(parts[2])
+def _parse_version(v: str) -> tuple[int, ...]:
+    v = v.strip()
+    if v.startswith("v"):
+        v = v[1:]
+    parts = v.split(".")
+    return tuple(int(p) for p in parts)
 
 
 def is_newer_version(latest: str, current: str) -> bool:
     try:
-        return _parse_version(latest) > _parse_version(current)
+        v_latest = _parse_version(latest)
+        v_current = _parse_version(current)
+
+        # Pad with zeros to make them the same length for comparison
+        # e.g., "1.0" vs "1.0.0" -> (1, 0, 0) vs (1, 0, 0)
+        max_len = max(len(v_latest), len(v_current))
+        v_latest_padded = v_latest + (0,) * (max_len - len(v_latest))
+        v_current_padded = v_current + (0,) * (max_len - len(v_current))
+
+        return v_latest_padded > v_current_padded
     except Exception:
         return latest.strip() != current.strip()
 
