@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import lru_cache
 from PIL import Image, ImageDraw
 
 
@@ -18,6 +19,13 @@ def create_progress_icon(progress: float, size: int = 64) -> Image.Image:
         progress: 进度值 0.0 - 1.0
         size: 图标尺寸
     """
+    percent = int(progress * 100)
+    return _create_progress_icon_cached(percent, size)
+
+
+@lru_cache(maxsize=128)
+def _create_progress_icon_cached(percent: int, size: int) -> Image.Image:
+    """内部缓存实现：根据百分比整数生成图标"""
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
@@ -41,6 +49,7 @@ def create_progress_icon(progress: float, size: int = 64) -> Image.Image:
     )
 
     # 进度圆弧 (渐变色: 蓝->绿)
+    progress = percent / 100.0
     if progress > 0:
         # 从顶部开始 (-90度)，顺时针方向
         start_angle = -90
@@ -69,7 +78,7 @@ def create_progress_icon(progress: float, size: int = 64) -> Image.Image:
         )
 
     # 中心百分比文字
-    percent_text = f"{int(progress * 100)}"
+    percent_text = f"{percent}"
 
     # 使用默认字体，调整位置使其居中
     # 简单居中：对于2位数和3位数做不同处理
