@@ -1,18 +1,15 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Optional
 
 import numpy as np
 import sounddevice as sd
-import soundfile as sf
 
 
 @dataclass
 class RecordingResult:
     pcm_bytes: Optional[bytes] = None
-    wav_bytes: Optional[bytes] = None
     temp_path: Optional[str] = None
 
 
@@ -31,7 +28,7 @@ class Recorder:
             pass
         if not self._is_recording:
             raise sd.CallbackStop()
-        self._chunks.append(indata.copy().tobytes())
+        self._chunks.append(indata.tobytes())
         self._frames_written += frames
         if self._frames_written >= self._max_frames:
             raise sd.CallbackStop()
@@ -60,14 +57,4 @@ class Recorder:
             self._stream = None
 
         pcm_bytes = b"".join(self._chunks)
-        wav_bytes = self._pcm_to_wav(pcm_bytes)
-        return RecordingResult(pcm_bytes=pcm_bytes, wav_bytes=wav_bytes)
-
-    def _pcm_to_wav(self, pcm_bytes: bytes) -> bytes:
-        if not pcm_bytes:
-            return b""
-        audio = np.frombuffer(pcm_bytes, dtype=np.int16)
-        audio = audio.reshape(-1, 1)
-        buffer = BytesIO()
-        sf.write(buffer, audio, self.sample_rate, subtype="PCM_16", format="WAV")
-        return buffer.getvalue()
+        return RecordingResult(pcm_bytes=pcm_bytes)

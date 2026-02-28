@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import faulthandler
 import logging
-import os
 import sys
 import tempfile
 import threading
