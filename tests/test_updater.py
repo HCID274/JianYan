@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 mock_httpx = MagicMock()
 sys.modules["httpx"] = mock_httpx
 
-from utils.updater import is_newer_version
+from utils.updater import is_newer_version  # noqa: E402
 
 def test_is_newer_version_basic():
     assert is_newer_version("1.0.1", "1.0.0") is True
