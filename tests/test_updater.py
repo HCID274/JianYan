@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 mock_httpx = MagicMock()
 sys.modules["httpx"] = mock_httpx
 
-import pytest
 from utils.updater import is_newer_version
 
 def test_is_newer_version_basic():

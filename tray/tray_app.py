@@ -308,8 +308,8 @@ class TrayApp:
 
         logging.info("[TrayApp] 调用 recorder.stop()...")
         result = self._recorder.stop()
-        logging.info("[TrayApp] recorder.stop() 完成, wav_bytes 大小: %d", 
-                     len(result.wav_bytes) if result.wav_bytes else 0)
+        logging.info("[TrayApp] recorder.stop() 完成, pcm_bytes 大小: %d",
+                     len(result.pcm_bytes) if result.pcm_bytes else 0)
         self._update_icon()
         play_stop_sound()
 
@@ -346,7 +346,7 @@ class TrayApp:
         progress_thread.start()
         
         try:
-            raw_text = transcribe_audio(result.wav_bytes, result.temp_path, self.state.config).strip()
+            raw_text = transcribe_audio(result.pcm_bytes, result.temp_path, self.state.config).strip()
             # 本地预处理：去除连续重复的标点符号
             raw_text = preprocess_text(raw_text)
             # 避免在日志中记录用户的转写内容（可能包含敏感信息）

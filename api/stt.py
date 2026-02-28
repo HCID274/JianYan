@@ -4,7 +4,6 @@ import os
 import re
 import threading
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -40,16 +39,17 @@ def transcribe_audio(audio_bytes: bytes | None, temp_path: str | None, config: A
     if rich_transcription_postprocess is None:
         raise RuntimeError("未安装 funasr，请先安装本地模型依赖")
 
-    wav_bytes = _load_bytes(audio_bytes, temp_path)
-    if not wav_bytes:
+    if temp_path:
+        audio, sample_rate = sf.read(temp_path, dtype="float32")
+        if sample_rate != 16000:
+            raise RuntimeError("录音采样率必须是 16kHz")
+        if audio.ndim > 1:
+            audio = np.mean(audio, axis=1)
+    elif audio_bytes:
+        # audio_bytes is 16kHz PCM 16-bit
+        audio = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+    else:
         return ""
-
-    audio, sample_rate = sf.read(BytesIO(wav_bytes), dtype="float32")
-    if sample_rate != 16000:
-        raise RuntimeError("录音采样率必须是 16kHz")
-
-    if audio.ndim > 1:
-        audio = np.mean(audio, axis=1)
 
     model = _get_model(config)
     result = model.generate(
@@ -68,11 +68,6 @@ def preload_model(config: AppConfig) -> None:
     _get_model(config)
 
 
-def _load_bytes(audio_bytes: bytes | None, temp_path: str | None) -> bytes:
-    if temp_path:
-        with open(temp_path, "rb") as f:
-            return f.read()
-    return audio_bytes or b""
 
 
 def _get_local_model_paths(config: AppConfig) -> dict[str, str | None]:
