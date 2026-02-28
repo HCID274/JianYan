@@ -93,11 +93,20 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
                     messages=[{"role": "user", "content": "ping"}],
                     max_tokens=1,
                 )
-                root.after(0, lambda: messagebox.showinfo("测试成功", "连接正常，API Key 有效", parent=root))
+
+                def _on_success() -> None:
+                    test_btn.config(state="normal", text="测试连接")
+                    messagebox.showinfo("测试成功", "连接正常，API Key 有效", parent=root)
+                root.after(0, _on_success)
             except Exception as exc:
                 err = str(exc)
-                root.after(0, lambda msg=err: messagebox.showerror("测试失败", msg, parent=root))
 
+                def _on_error() -> None:
+                    test_btn.config(state="normal", text="测试连接")
+                    messagebox.showerror("测试失败", err, parent=root)
+                root.after(0, _on_error)
+
+        test_btn.config(state="disabled", text="测试中...")
         threading.Thread(target=_worker, daemon=True).start()
 
     def on_save() -> None:
@@ -133,7 +142,8 @@ def _build_settings_ui(root: tk.Tk, config: AppConfig, result: dict) -> None:
     def on_cancel() -> None:
         root.destroy()
 
-    tk.Button(root, text="测试连接", command=_test_connection, width=10).grid(row=7, column=0, padx=10, pady=10)
+    test_btn = tk.Button(root, text="测试连接", command=_test_connection, width=10)
+    test_btn.grid(row=7, column=0, padx=10, pady=10)
     tk.Button(root, text="保存", command=on_save, width=10).grid(row=7, column=1, padx=10, pady=10, sticky="e")
     tk.Button(root, text="取消", command=on_cancel, width=10).grid(row=7, column=2, padx=10, pady=10, sticky="e")
 
